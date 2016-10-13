@@ -1,0 +1,116 @@
+//Check to see if the player has moved from his tile
+bool SameOrDiff = IndexCheck();
+
+//He hasn't moved, no further action needed
+if (!SameOrDiff)
+{
+  return true;
+}
+
+//Safety check for the frame after Brute Charge
+if (currentPlayerIndex == -1)
+{
+  currentPlayerIndex = 0;
+}
+
+//Get player's location, reset all tiles
+CTile * theTileInQuestion = TileMap[currentPlayerIndex];
+for (unsigned int reset = 0; reset < TileMap.size(); reset++)
+{
+  TileMap[reset]->SetTarget(nullptr);
+  TileMap[reset]->SetAltTarget(nullptr);
+  TileMap[reset]->SetWanderingTarget(nullptr);
+  TileMap[reset]->SetVisible(false);
+  TileMap[reset]->SetVisibleDirection(NO_DIR);
+}
+
+//Set the tile the player is on to point to itself for all zombies on that tile
+theTileInQuestion->SetTarget(theTileInQuestion);
+theTileInQuestion->SetVisible(true);
+
+//Loop through all 8 neighboring tiles and have them point to the tile the player is on
+for (unsigned int i = 0; i < 8; i++)
+{
+  CTile * aNeighbor = theTileInQuestion->GetNeighborArray()[i];
+  
+  //If the neighboring tile doesn't have a target
+  if (aNeighbor != nullptr)
+    {
+      aNeighbor->SetTarget(theTileInQuestion);
+      aNeighbor->SetVisible(true);
+      aNeighbor->SetVisibleDirection((The8Neighbors)i);
+      open.push(aNeighbor);
+    }
+}
+
+while (!open.empty()) //Make influence map
+{
+  CTile * FrontTile = open.front();
+  open.pop();
+  
+  for (unsigned int i = 0; i < 8; i++)
+  {
+    CTile * theNeighbor = FrontTile->GetNeighborArray()[i];
+    if (theNeighbor != nullptr)
+    {
+      // Line of Sight - if the tile can directly see where the player is, set true
+      if (i == FrontTile->GetVisibleDirection())
+      {
+        theNeighbor->SetVisibleDirection((The8Neighbors)i);
+        theNeighbor->SetVisible(true);
+      }
+      
+      // Perfect Path - Most direct tile path to the player
+      if (theNeighbor->GetTarget() == nullptr)
+      {
+        theNeighbor->SetTarget(FrontTile);
+        open.push(theNeighbor);
+      }
+      
+      // Alternate Path - Alternate tile path to the player to create disparity
+      else if (theNeighbor->GetAltTarget() == nullptr)
+      {
+        theNeighbor->SetAltTarget(FrontTile);
+      }
+
+      //If the tile has no target whatsoever, we will give it a random direction to "wander" to
+      if (theNeighbor->GetTarget() != nullptr && theNeighbor->GetAltTarget() != nullptr && theNeighbor->GetWanderingTarget() == nullptr)
+      {
+        //find out how many vacant neighbors there are
+        int numVacantNeighbors = theNeighbor->GetNumOfNeighbors() - 2;
+        int theRightNeighbor = 0;
+        
+        if (numVacantNeighbors > 0)
+        {
+          theRightNeighbor = rand() % numVacantNeighbors;
+        }
+        
+        //Loop through all neighbors
+        for (int randNeighbor = 0; randNeighbor < 8; randNeighbor++)
+        {
+          if (theNeighbor->GetNeighborArray()[randNeighbor] == nullptr)
+          {
+            continue; //continue if slot's empty
+          }
+          
+          //If the random nearby tile has all its targets, continue
+          if (theNeighbor->GetNeighborArray()[randNeighbor] == theNeighbor->GetTarget()
+          || theNeighbor->GetNeighborArray()[randNeighbor] == theNeighbor->GetAltTarget())
+          {
+            continue;
+          }
+          
+          //This is the last vacant neighbor this tile has, set its wandering target here
+          if (theRightNeighbor == 0)
+          {
+            theNeighbor->SetWanderingTarget(theNeighbor->GetNeighborArray()[randNeighbor]);
+            break;
+          }
+          
+          //All criteria met, reduce the neighbor by 1
+          theRightNeighbor--;
+        }
+      }
+    }
+  }
+}
